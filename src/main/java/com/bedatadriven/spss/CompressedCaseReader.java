@@ -15,6 +15,7 @@
 package com.bedatadriven.spss;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 class CompressedCaseReader extends CaseReader {
@@ -97,6 +98,7 @@ class CompressedCaseReader extends CaseReader {
       } else {
         StringBuilder buffer = new StringBuilder();
         int totalBytesRead = 0;
+        byte[]rowBytes = new byte[0];
         do {
           // the "compressed" strings are stored
           // in 8-byte segments. If the segment is all
@@ -105,18 +107,20 @@ class CompressedCaseReader extends CaseReader {
           // are stored.
           storageFlag = readNextStorageFlag();
           if (storageFlag == STRING_FLAG) {
-            buffer.append(inputStream.stringFromBytes(inputStream.readBytes(8)));
+            byte[] bytes = inputStream.readBytes(8);
+            rowBytes = Arrays.copyOf(rowBytes,rowBytes.length+8);
+            System.arraycopy(bytes,0,rowBytes,rowBytes.length-8,8);
           } else if (storageFlag == WHITESPACE_FLAG) {
-            buffer.append("        "); //trailing white spaces get trimmed at the end
+              byte[] trim = new byte[] {32,32,32,32,32,32,32,32};
+              rowBytes = Arrays.copyOf(rowBytes,rowBytes.length+8);
+              System.arraycopy(trim,0,rowBytes,rowBytes.length-8,8);
           }
           totalBytesRead += 8;
         } while (totalBytesRead < var.stringLength);
-
-        //remove the padding bytes used for filling 8 byte block
-        int paddingBytes = totalBytesRead - var.stringLength;
-        int end = buffer.length()-paddingBytes;        
-        String strValue = buffer.substring(0,  end);
-        String trimmedValue = strValue.trim();
+        
+          buffer.append(inputStream.stringFromBytes(rowBytes));
+          String strValue=buffer.toString();
+          String trimmedValue = strValue.trim();
         
         if(var.isVeryLongString() || var.isVeryLongStringSegment()) {
           int trailingSpaces = strValue.length() - trimmedValue.length();
